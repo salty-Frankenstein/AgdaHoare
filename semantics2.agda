@@ -10,7 +10,7 @@ open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
 open import Relation.Nullary.Decidable using (⌊_⌋; True; toWitness; fromWitness)
 open import Data.Integer.Base using (ℤ; _+_; _-_; +_)
-open import Data.Integer.Properties using (_<?_)
+open import Data.Integer.Properties using (_<?_;_≤?_) renaming (_≟_ to _=?_)
 
 open import lang
 
@@ -37,11 +37,20 @@ lookup : ∀ (σ : State) → (x : Id) → ℤ
 lookup s x = s x
 
 -- eval with all var-value zero-default
-eval : (s : State) → (x : IExp) → ℤ 
-eval s (N x) = x
-eval s (Var x)  = lookup s x
-eval s (x₁ `+ x₂) = eval s x₁ + eval s x₂
-eval s (x₁ `- x₂) = eval s x₁ - eval s x₂
+evalI : State → IExp → ℤ 
+evalI s (N x) = x
+evalI s (Var x)  = lookup s x
+evalI s (x₁ `+ x₂) = evalI s x₁ + evalI s x₂
+evalI s (x₁ `- x₂) = evalI s x₁ - evalI s x₂
+
+evalB : State → BExp → Bool
+evalB s (BV x) = x
+evalB s (x₁ `< x₂) = ⌊ evalI s x₁ <? evalI s x₂ ⌋
+evalB s (x₁ `= x₂) = ⌊ evalI s x₁ =? evalI s x₂ ⌋
+evalB s (x₁ `> x₂) = not ⌊ evalI s x₁ ≤? evalI s x₂ ⌋
+evalB s (`¬ x) = not (evalB s x)
+evalB s (x₁ `∧ x₂) = evalB s x₁ ∧ evalB s x₂
+evalB s (x₁ `∨ x₂) = evalB s x₁ ∨ evalB s x₂
 
 modify : State → Id → ℤ → State
 modify s x n x' with x ≟ x' 
@@ -58,17 +67,13 @@ modify s x n x' with x ≟ x'
 --     ... | yes (S c') = modify' (state xs) x (yes c') n
 --     ... | no _ = state (⟨ x , n ⟩ ∷ [])
 
-_ : eval (modify σ₀ "x" (+ 1)) (N (+ 1) `+ Var "x") ≡ + 2
+_ : evalI (modify σ₀ "x" (+ 1)) (N (+ 1) `+ Var "x") ≡ + 2
 _ = refl
 
 data _-→_ : Stmt × State → Stmt × State → Set where
-  `<-eval : ∀ {n₁ n₂ σ}
-    -------------------------------------------------------------
-    → ⟨ B (n₁ `< n₂) , σ ⟩ -→ ⟨ B (BV ⌊ eval σ n₁ <? eval σ n₂ ⌋) , σ ⟩
-
   :=-exec : ∀ {x n σ}
     --------------------------------------------------------
-    → ⟨ C (x := n) , σ ⟩ -→ ⟨ C skip , modify σ x (eval σ n) ⟩ 
+    → ⟨ C (x := n) , σ ⟩ -→ ⟨ C skip , modify σ x (evalI σ n) ⟩ 
 
   ;-left : ∀ {c₀ c₀′ σ σ′ c₁}
     → ⟨ C c₀ , σ ⟩ -→ ⟨ C c₀′ , σ′ ⟩ 
@@ -79,22 +84,25 @@ data _-→_ : Stmt × State → Stmt × State → Set where
     ---------------------------------
     → ⟨ C (skip ; c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
 
-  `if-cond : ∀ {b b′ σ σ′ c₀ c₁}
-    → ⟨ B b , σ ⟩ -→ ⟨ B b′ , σ′ ⟩ 
-    ---------------------------------------------------------------
-    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C (`if b′ `then c₀ `else c₁) , σ′ ⟩ 
-
-  `if-true : ∀ {c₀ c₁ σ}
+  `if-true : ∀ {b c₀ c₁ σ}
+    → evalB σ b ≡ true
     ------------------------------------------------------
-    → ⟨ C (`if (BV true) `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₀ , σ ⟩ 
+    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₀ , σ ⟩ 
 
-  `if-false : ∀ {c₀ c₁ σ}
+  `if-false : ∀ {b c₀ c₁ σ}
+    → evalB σ b ≡ false
     -------------------------------------------------------
-    → ⟨ C (`if (BV false) `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
+    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
 
-  `while-exec : ∀ {b c σ}
-    -------------------------------------------------------------------------------
-    → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C (`if b `then (c ; `while b `do c) `else skip) , σ ⟩ 
+  `while-true : ∀ {b c σ}
+    → evalB σ b ≡ true
+    --------------------------------------------------------------
+    → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C (c ; `while b `do c) , σ ⟩ 
+
+  `while-false : ∀ {b c σ}
+    → evalB σ b ≡ false
+    ----------------------------------------------
+    → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C skip , σ ⟩ 
 
 infix  2 _-→*_
 infix  1 `begin_
@@ -115,6 +123,12 @@ data _>-_-→_ : Stmt × State → ℕ → Stmt × State → Set where
 _-→*_ : Stmt × State → Stmt × State → Set 
 M' -→* N' = ∃[ n ] (M' >- n -→ N')
   
+form-→* : ∀ {M N n} 
+  → M >- n -→ N 
+  → M -→* N
+form-→* -→Z = ⟨ 0 , -→Z ⟩
+form-→* (x -→S x₁) with form-→* x₁ 
+... | ⟨ fst , snd ⟩ = ⟨ (suc fst) , x -→S snd ⟩
 
 -- data _-→*_ : Stmt × State → Stmt × State → Set where
 --   form : ∀ {M N n}
