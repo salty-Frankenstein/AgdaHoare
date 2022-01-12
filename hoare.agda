@@ -1,5 +1,6 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n)
+open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n; _<_; _≤_; _≡ᵇ_; _+_) renaming (_≟_ to _=?_)
+open import Data.Nat.Properties using (≤-trans; ≤-reflexive; +-monoˡ-<; ≡ᵇ⇒≡)
 open import Data.String using (String; _≟_)
 open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
 open import Data.List using (List; _∷_; [])
@@ -9,9 +10,7 @@ open import Data.Product using (_×_; proj₁; proj₂; Σ; ∃; Σ-syntax; ∃-
 open import Data.Unit using (⊤; tt)
 open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
-open import Relation.Nullary.Decidable using (⌊_⌋; True; toWitness; fromWitness)
-open import Data.Integer.Base using (ℤ; _+_; _-_; +_; _<_; _≤_)
-open import Data.Integer.Properties using (_<?_; ≤-step; ≤-<-trans; +-monoˡ-<; ≤-reflexive; ≤-trans) renaming (_≟_ to _=?_)
+open import Relation.Nullary.Decidable using (True; toWitness; fromWitness)
 
 open import lang
 open import semantics2
@@ -44,29 +43,11 @@ FALSE : Assertion
 FALSE = λ st → ⊥
 
 A : BExp → Assertion
--- A (BV false) = FALSE
--- A (BV true) = TRUE
--- A (x₁ `< x₂) = x₁ !< x₂
--- A (x₁ `= x₂) = x₁ == x₂
--- A (x₁ `> x₂) = ! (x₁ !< x₂)
--- A (`¬ b) = ! (A b)
--- A (b₁ `∧ b₂) = A b₁ && A b₂
--- A (b₁ `∨ b₂) = A b₁ || A b₂
-A b = λ st → evalB st b ≡ true
+A b = λ st → T (evalB st b)
 
--- lemma : ∀ {st b} → evalB st b ≡ true → A b st
--- lemma {st} {BV .true} refl = tt
--- lemma {st} {x₁ `< x₂} x = {!  !}
--- lemma {st} {x₁ `= x₂} x = {!   !}
--- lemma {st} {x₁ `> x₂} x = {!   !}
--- lemma {st} {`¬ b} x = {!   !}
--- lemma {st} {b `∧ b₁} x = {!   !}
--- lemma {st} {b `∨ b₁} x = {!   !} 
-    -- where
-    --     g : ∀ {a b st } → eval st (a `< b) ≡ true → A () st
-
-notTrue : ∀ {x} → (x ≡ false) → ¬ (x ≡ true) 
-notTrue refl ()
+notTrue : ∀ {x} → T (not x) → ¬ T x
+notTrue {false} tt ()
+notTrue {true} () x₁
 
 
 infixr 0 _⇒_ 
@@ -138,66 +119,36 @@ h-cd (form caseT) (form caseF) =
     form λ {⟨ suc _ , `if-true x -→S snd ⟩ Pst → caseT (form-→* snd) ⟨ Pst , x ⟩
           ; ⟨ suc _ , `if-false x -→S snd ⟩ Pst → caseF (form-→* snd) ⟨ Pst , notTrue x ⟩}
 
--- _ : ⦃| TRUE |⦄ X := pN 0 ⦃| _X !< pN 5 |⦄
--- _ = h-sp (form λ x → _<_.+<+ (s≤s z≤n)) h-:=
+_ : ⦃| TRUE |⦄ X := N 0 ⦃| _X !< N 5 |⦄
+_ = h-sp (form λ x → s≤s z≤n) h-:=
 
--- _ : ⦃| _X !< pN 4 |⦄ X := _X `+ pN 1 ⦃| _X !< pN 5 |⦄
--- _ = h-sp (form (λ pst → +-monoˡ-< (+ 1) pst)) h-:=
+_ : ⦃| _X !< N 4 |⦄ X := _X `+ N 1 ⦃| _X !< N 5 |⦄
+_ = h-sp (form (λ pst → +-monoˡ-< 1 pst)) h-:=
 
--- _ : ∃[ P ] ⦃| P |⦄ X := _X `+ pN 2 ⦃| _X <= pN 10 |⦄
--- _ = ⟨ _X <= pN 10 [ X ↦ _X `+ pN 2 ] , h-:= ⟩
+_ : ∃[ P ] ⦃| P |⦄ X := _X `+ N 2 ⦃| _X <= N 10 |⦄
+_ = ⟨ _X <= N 10 [ X ↦ _X `+ N 2 ] , h-:= ⟩
 
--- _ : ⦃| TRUE |⦄ X := pN 1 ; Y := pN 2 ⦃| _X == pN 1 && _Y == pN 2 |⦄
--- _ = h-sp (form (λ x → tt)) 
---       (h-sc (h-sp (form (λ x → refl)) h-:=) (h-sp (form (λ x → ⟨ x , refl ⟩)) h-:=))
+_ : ⦃| TRUE |⦄ X := N 1 ; Y := N 2 ⦃| _X == N 1 && _Y == N 2 |⦄
+_ = h-sp (form (λ x → tt)) 
+      (h-sc (h-sp (form (λ x → refl)) h-:=) (h-sp (form (λ x → ⟨ x , refl ⟩)) h-:=))
 
 
--- _ : ⦃| TRUE |⦄ 
---     `if _X `= pN 0 
---     `then Y := pN 2 
---     `else (Y := _X `+ pN 1) 
---     ⦃| _X <= _Y |⦄
--- _ = h-cd (h-sp l l1) (h-sp l l2)
---     where 
---         l : ∀ {P} → TRUE && P ⇒ P
---         l = {!   !}
+_ : ⦃| TRUE |⦄ 
+    `if _X `= N 0 
+    `then Y := N 2 
+    `else (Y := _X `+ N 1) 
+    ⦃| _X <= _Y |⦄
+_ = h-cd (h-sp l (h-sp f h-:= )) (h-sp l (h-sp (form λ x → k) h-:=))
+    where 
+        l : ∀ {P} → TRUE && P ⇒ P
+        l = form proj₂
 
---         l1 : ⦃| A (_X `= pN 0) |⦄ Y := pN 2 ⦃| _X <= _Y |⦄
---         l1 = h-sp f h-:= 
---             where
---                 g : ∀ {a b : ℤ} → ⌊ a =? b ⌋ ≡ true → a ≡ b
---                 g x = {!  !}
+        g : ∀ {a b : ℕ} → T (a ≡ᵇ b) → a ≡ b
+        g {a} {b} = ≡ᵇ⇒≡ a b
 
---                 f : A (_X `= pN 0) ⇒ (_X <= _Y) [ Y ↦ pN 2 ]
---                 f = form λ x → ≤-trans (≤-reflexive (g x)) (_≤_.+≤+ z≤n)
-
---                 -- x : isYes (st "X" =? + 0) ≡ true
---         l2 : ⦃| (! A (_X `= pN 0)) |⦄ Y := (_X `+ pN 1) ⦃| _X <= _Y |⦄
---         l2 = {!   !}
-
--- _ : ⦃| TRUE |⦄ 
---     `if _X `= pN 0 
---     `then Y := pN 2 
---     `else (Y := _X `+ pN 1) 
---     ⦃| _X <= _Y |⦄
--- _ = h-cd (h-sp (form f) h-:=) (h-sp (form g) h-:=)
---   where
---     td : + 0 ≤ + 2
---     td = _≤_.+≤+ z≤n
-
---     kk : ∀ {a b : ℤ} → ⌊ a =? b ⌋ ≡ true → a ≡ b
---     kk x = {!  !}
-    
---     te : ∀ {st} → evalB st (_X `= pN 0) ≡ true → evalI st _X ≡ + 0
---     te {st} x = {!   !}
-
---     tf : ∀ {a b c} → a ≡ b → b ≤ c → a ≤ c 
---     tf = {!   !}
-
---     f : ∀ {st : State} →
---       (TRUE && A (_X `= pN 0)) st → ((_X <= _Y) [ Y ↦ pN 2 ]) st
---     f {st} ⟨ fst , snd ⟩ = tf (te {st} snd) td
-
---     g : {st : State} →
---       (TRUE && (! A (_X `= pN 0))) st → ((_X <= _Y) [ Y ↦ _X `+ pN 1 ]) st
---     g = {!   !}
+        f : A (_X `= N 0) ⇒ (_X <= _Y) [ Y ↦ N 2 ]
+        f = form λ x → ≤-trans (≤-reflexive (g x)) z≤n
+        
+        k : ∀ {x} → x ≤ x + 1
+        k {zero} = z≤n
+        k {suc x} = s≤s k

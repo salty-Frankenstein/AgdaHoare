@@ -1,5 +1,5 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc)
+open import Data.Nat using (ℕ; zero; suc; _+_; _∸_; _<?_; _≤?_; _<ᵇ_; _≡ᵇ_) renaming (_≟_ to _=?_)
 open import Data.String using (String; _≟_)
 open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
 open import Data.List using (List; _∷_; [])
@@ -8,22 +8,20 @@ open import Data.Product using (_×_; proj₁; proj₂; Σ; ∃; Σ-syntax; ∃-
 open import Data.Unit using (⊤; tt)
 open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
-open import Relation.Nullary.Decidable using (⌊_⌋; True; toWitness; fromWitness)
-open import Data.Integer.Base using (ℤ; _+_; _-_; +_)
-open import Data.Integer.Properties using (_<?_;_≤?_) renaming (_≟_ to _=?_)
+open import Relation.Nullary.Decidable using (True; toWitness; fromWitness)
 
 open import lang
 
 State : Set 
-State = Id → ℤ
+State = Id → ℕ
 
 
 σ₀ : State
-σ₀ = λ _ → + 0
+σ₀ = λ _ → 0
 
 data Value : IExp → Set where
   V-n : ∀ {n} → Value (N n)
-getVal : ∀ (n : IExp) → Value n → ℤ
+getVal : ∀ (n : IExp) → Value n → ℕ
 getVal (N n) V-n = n 
 
 data IsVar : IExp → Set where
@@ -33,26 +31,26 @@ getId : ∀ (x : IExp) → IsVar x → Id
 getId (Var x) Var-v = x
 
 -- lookup with all var-value zero-default
-lookup : ∀ (σ : State) → (x : Id) → ℤ
+lookup : ∀ (σ : State) → (x : Id) → ℕ
 lookup s x = s x
 
 -- eval with all var-value zero-default
-evalI : State → IExp → ℤ 
+evalI : State → IExp → ℕ 
 evalI s (N x) = x
 evalI s (Var x)  = lookup s x
 evalI s (x₁ `+ x₂) = evalI s x₁ + evalI s x₂
-evalI s (x₁ `- x₂) = evalI s x₁ - evalI s x₂
+evalI s (x₁ `- x₂) = evalI s x₁ ∸ evalI s x₂
 
 evalB : State → BExp → Bool
 evalB s (BV x) = x
-evalB s (x₁ `< x₂) = ⌊ evalI s x₁ <? evalI s x₂ ⌋
-evalB s (x₁ `= x₂) = ⌊ evalI s x₁ =? evalI s x₂ ⌋
-evalB s (x₁ `> x₂) = not ⌊ evalI s x₁ ≤? evalI s x₂ ⌋
+evalB s (x₁ `< x₂) = evalI s x₁ <ᵇ evalI s x₂
+evalB s (x₁ `= x₂) = evalI s x₁ ≡ᵇ evalI s x₂
+evalB s (x₁ `> x₂) = let l = evalI s x₁; r = evalI s x₂ in not ((l <ᵇ r) ∧ (l ≡ᵇ r))
 evalB s (`¬ x) = not (evalB s x)
 evalB s (x₁ `∧ x₂) = evalB s x₁ ∧ evalB s x₂
 evalB s (x₁ `∨ x₂) = evalB s x₁ ∨ evalB s x₂
 
-modify : State → Id → ℤ → State
+modify : State → Id → ℕ → State
 modify s x n x' with x ≟ x' 
 ... | yes _ = n
 ... | no _ = s x'
@@ -67,7 +65,7 @@ modify s x n x' with x ≟ x'
 --     ... | yes (S c') = modify' (state xs) x (yes c') n
 --     ... | no _ = state (⟨ x , n ⟩ ∷ [])
 
-_ : evalI (modify σ₀ "x" (+ 1)) (N (+ 1) `+ Var "x") ≡ + 2
+_ : evalI (modify σ₀ "x" 1) (N 1 `+ Var "x") ≡ 2
 _ = refl
 
 data _-→_ : Stmt × State → Stmt × State → Set where
@@ -85,22 +83,22 @@ data _-→_ : Stmt × State → Stmt × State → Set where
     → ⟨ C (skip ; c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
 
   `if-true : ∀ {b c₀ c₁ σ}
-    → evalB σ b ≡ true
+    → T (evalB σ b)
     ------------------------------------------------------
     → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₀ , σ ⟩ 
 
   `if-false : ∀ {b c₀ c₁ σ}
-    → evalB σ b ≡ false
+    → T (not (evalB σ b))
     -------------------------------------------------------
     → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
 
   `while-true : ∀ {b c σ}
-    → evalB σ b ≡ true
+    → T (evalB σ b)
     --------------------------------------------------------------
     → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C (c ; `while b `do c) , σ ⟩ 
 
   `while-false : ∀ {b c σ}
-    → evalB σ b ≡ false
+    → T (not (evalB σ b))
     ----------------------------------------------
     → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C skip , σ ⟩ 
 

@@ -1,27 +1,28 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
 open import Data.Nat using (ℕ)
+open import Data.Nat.Base using (_+_; _∸_)
 open import Data.String using (String; _≟_)
 open import Data.List using (List; _∷_; [])
 open import Data.Product using (_×_; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
-open import Data.Integer.Base using (ℤ; _+_; _-_; +_)
+-- open import Data.Integer.Base using (ℤ; _+_; _-_; +_)
 
 Id : Set
 Id = String
 
 data IExp : Set where
-  N : ℤ → IExp
+  N : ℕ → IExp
   Var : Id → IExp
   _`+_ : IExp → IExp → IExp
   _`-_ : IExp → IExp → IExp
 
 data BExp : Set where 
   BV : Bool → BExp
-  _`<_ : IExp → IExp → BExp
-  _`=_ : IExp → IExp → BExp
-  _`>_ : IExp → IExp → BExp
+  _`<_ : (x₁ : IExp) → (x₂ : IExp) → BExp
+  _`=_ : (x₁ : IExp) → (x₂ : IExp) → BExp
+  _`>_ : (x₁ : IExp) → (x₂ : IExp) → BExp
   `¬_ : BExp → BExp
-  _`∧_ : BExp → BExp → BExp
-  _`∨_ : BExp → BExp → BExp
+  _`∧_ : (b₁ : BExp) → (b₂ : BExp) → BExp
+  _`∨_ : (b₁ : BExp) → (b₂ : BExp) → BExp
 
 data Comm : Set where
   skip : Comm
@@ -43,5 +44,3 @@ _Z = Var "Z"
 X = "X"
 Y = "Y"
 Z = "Z"
-pN : ℕ → IExp
-pN n = N (+ n)
