@@ -129,9 +129,9 @@ h-wh {i} {b} {c} (form x) = form f
     f ⟨ suc .(suc (suc _)) , `while-true bt -→S ;-exec -→S snd@(_-→S_ {n = n} _ _) ⟩ x₁ = f ⟨ suc n , snd ⟩  x₁ 
     f ⟨ suc .(suc _) , `while-true bt -→S sd@(;-left _ -→S _) ⟩ x₁ with sc-sp sd 
     ... | ⟨ s , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , refl ⟩ ⟩ ⟩ ⟩ ⟩ = 
-      let t1 = x (form-→* fst) ⟨ x₁ , bt ⟩ 
-          kkk = f (form-→* snd) t1
-       in kkk
+      let t1 = x ⟨ a , fst ⟩ ⟨ x₁ , bt ⟩ 
+       in f ⟨ b , snd ⟩ t1
+       
       -- let kk = x k ⟨ x₁ , bt ⟩ 
           -- kkk = f k₁ kk in {!   !}
 
