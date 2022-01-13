@@ -18,6 +18,7 @@ data IExp : Set where
 data BExp : Set where 
   BV : Bool → BExp
   _`<_ : (x₁ : IExp) → (x₂ : IExp) → BExp
+  _`≤_ : (x₁ : IExp) → (x₂ : IExp) → BExp
   _`=_ : (x₁ : IExp) → (x₂ : IExp) → BExp
   _`>_ : (x₁ : IExp) → (x₂ : IExp) → BExp
   `¬_ : BExp → BExp

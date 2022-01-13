@@ -44,8 +44,9 @@ evalI s (x₁ `- x₂) = evalI s x₁ ∸ evalI s x₂
 evalB : State → BExp → Bool
 evalB s (BV x) = x
 evalB s (x₁ `< x₂) = evalI s x₁ <ᵇ evalI s x₂
+evalB s (x₁ `≤ x₂) = let l = evalI s x₁; r = evalI s x₂ in (l <ᵇ r) ∨ (l ≡ᵇ r)
 evalB s (x₁ `= x₂) = evalI s x₁ ≡ᵇ evalI s x₂
-evalB s (x₁ `> x₂) = let l = evalI s x₁; r = evalI s x₂ in not ((l <ᵇ r) ∧ (l ≡ᵇ r))
+evalB s (x₁ `> x₂) = let l = evalI s x₁; r = evalI s x₂ in not ((l <ᵇ r) ∨ (l ≡ᵇ r))
 evalB s (`¬ x) = not (evalB s x)
 evalB s (x₁ `∧ x₂) = evalB s x₁ ∧ evalB s x₂
 evalB s (x₁ `∨ x₂) = evalB s x₁ ∨ evalB s x₂
@@ -68,6 +69,7 @@ modify s x n x' with x ≟ x'
 _ : evalI (modify σ₀ "x" 1) (N 1 `+ Var "x") ≡ 2
 _ = refl
 
+{- small step -}
 data _-→_ : Stmt × State → Stmt × State → Set where
   :=-exec : ∀ {x n σ}
     --------------------------------------------------------
@@ -125,8 +127,7 @@ form-→* : ∀ {M N n}
   → M >- n -→ N 
   → M -→* N
 form-→* -→Z = ⟨ 0 , -→Z ⟩
-form-→* (x -→S x₁) with form-→* x₁ 
-... | ⟨ fst , snd ⟩ = ⟨ (suc fst) , x -→S snd ⟩
+form-→* s@(_-→S_ {n = n} _ _) = ⟨ suc n , s ⟩
 
 -- data _-→*_ : Stmt × State → Stmt × State → Set where
 --   form : ∀ {M N n}
@@ -154,3 +155,38 @@ x -→⟨ x-→y ⟩ ⟨ (suc n) , x₁ -→S x₂ ⟩ = ⟨ suc (suc n) , x-→
   → M -→* N 
 `begin M-→*N = M-→*N 
 
+{- big step -}
+data _⇓_ : Stmt × State → State → Set where
+  :=-exec : ∀ {x n σ}
+  ----------------------------------------------
+    → ⟨ C (x := n) , σ ⟩ ⇓ modify σ x (evalI σ n) 
+
+  ;-exec : ∀ {c₀ c₁ σ σ' σ''}
+    → ⟨ C c₀ , σ ⟩ ⇓ σ'
+    → ⟨ C c₁ , σ' ⟩ ⇓ σ''
+    ---------------------------------
+    → ⟨ C (c₀ ; c₁) , σ ⟩ ⇓ σ''
+
+  `if-true : ∀ {b c₀ c₁ σ σ'}
+    → T (evalB σ b)
+    → ⟨ C c₀ , σ ⟩ ⇓ σ'
+    -------------------------------------------
+    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ ⇓ σ'
+
+  `if-false : ∀ {b c₀ c₁ σ σ'}
+    → T (not (evalB σ b))
+    → ⟨ C c₁ , σ ⟩ ⇓ σ'
+    -------------------------------------------
+    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ ⇓ σ'
+
+  `while-true : ∀ {b c σ σ' σ''}
+    → T (evalB σ b)
+    → ⟨ C c , σ ⟩ ⇓ σ'
+    → ⟨ C (`while b `do c) , σ' ⟩ ⇓ σ''
+    --------------------------------------------------------------
+    → ⟨ C (`while b `do c) , σ ⟩ ⇓ σ''
+
+  `while-false : ∀ {b c σ}
+    → T (not (evalB σ b))
+    ----------------------------------
+    → ⟨ C (`while b `do c) , σ ⟩ ⇓ σ 

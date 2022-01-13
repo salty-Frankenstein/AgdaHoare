@@ -1,6 +1,6 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n; _<_; _≤_; _≡ᵇ_; _+_) renaming (_≟_ to _=?_)
-open import Data.Nat.Properties using (≤-trans; ≤-reflexive; +-monoˡ-<; ≡ᵇ⇒≡)
+open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n; _<_; _≤_; _≡ᵇ_; _<ᵇ_; _+_; _∸_) renaming (_≟_ to _=?_)
+open import Data.Nat.Properties using (≤-trans; ≤-reflexive; +-monoˡ-<; ≡ᵇ⇒≡; m+[n∸m]≡n)
 open import Data.String using (String; _≟_)
 open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
 open import Data.List using (List; _∷_; [])
@@ -11,6 +11,7 @@ open import Data.Unit using (⊤; tt)
 open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
 open import Relation.Nullary.Decidable using (True; toWitness; fromWitness)
+open import Function.Base using (_∘_; id)
 
 open import lang
 open import semantics2
@@ -18,7 +19,6 @@ open import semantics2
 
 Assertion : Set₁ 
 Assertion = State → Set
-
 
 infixl 5 _&&_
 infixl 4 _||_
@@ -58,7 +58,7 @@ data _⇒_ : Assertion → Assertion → Set where
 ⇒-trans (form x) (form x₁) = form (λ x₂ → x₁ (x x₂))
 
 &&-elim : ∀ {P : Assertion} → TRUE && P ⇒ P
-&&-elim = form (λ {⟨ _ , x ⟩ → x})
+&&-elim = form proj₂
 
 data ⦃|_|⦄_⦃|_|⦄ : Assertion → Comm → Assertion → Set where
   form : ∀ {P c Q}
@@ -72,17 +72,17 @@ p [ x ↦ a ] = λ st → p (modify st x (evalI st a))
 
 
 h-sp : ∀ {P P' Q c} 
-    → (P ⇒ P')
-    → ⦃| P' |⦄ c ⦃| Q |⦄
-    ---------------------
-    → ⦃| P |⦄ c ⦃| Q |⦄
+  → (P ⇒ P')
+  → ⦃| P' |⦄ c ⦃| Q |⦄
+  ---------------------
+  → ⦃| P |⦄ c ⦃| Q |⦄
 h-sp (form p⇒p') (form p'||q) = form (λ c p → p'||q c (p⇒p' p))
 
 h-wc : ∀ {P Q Q' c} 
-    → (Q ⇒ Q')
-    → ⦃| P |⦄ c ⦃| Q |⦄
-    ---------------------
-    → ⦃| P |⦄ c ⦃| Q' |⦄
+  → (Q ⇒ Q')
+  → ⦃| P |⦄ c ⦃| Q |⦄
+  ---------------------
+  → ⦃| P |⦄ c ⦃| Q' |⦄
 h-wc (form q⇒q') (form p||q) = form (λ c p → q⇒q' (p||q c p))
 
 h-:= : ∀ {Q X a} → ⦃| Q [ X ↦ a ] |⦄ (X := a) ⦃| Q |⦄
@@ -92,32 +92,52 @@ h-sk : ∀ {P} → ⦃| P |⦄ skip ⦃| P |⦄
 h-sk = form (λ {⟨ .0 , -→Z ⟩ x₁ → x₁})
 
 sc-sp : ∀ {c₁ c₂ s s' n} 
-    → ⟨ C (c₁ ; c₂) , s ⟩ >- n -→ ⟨ C skip , s' ⟩ 
-    -------------------------------------------------------------------------------------
-    → ∃[ s₂ ] ((⟨ C c₁ , s ⟩ -→* ⟨ C skip , s₂ ⟩) × (⟨ C c₂ , s₂ ⟩ -→* ⟨ C skip , s' ⟩))
+  → ⟨ C (c₁ ; c₂) , s ⟩ >- n -→ ⟨ C skip , s' ⟩ 
+  -------------------------------------------------------------------------------------
+  → ∃[ s₂ ] ((⟨ C c₁ , s ⟩ -→* ⟨ C skip , s₂ ⟩) × (⟨ C c₂ , s₂ ⟩ -→* ⟨ C skip , s' ⟩))
 sc-sp {.skip} {c₂} {s} {s'} {(suc n)} (;-exec -→S x₁) = ⟨ s , ⟨ ⟨ 0 , -→Z ⟩ , ⟨ n , x₁ ⟩ ⟩ ⟩
 sc-sp {c₁} {c₂} {s} {s'} {(suc n)} (;-left x -→S x₁) with sc-sp x₁
 ... | ⟨ s₂ , ⟨ ⟨ fst , snd ⟩ , t ⟩ ⟩ = ⟨ s₂ , ⟨ ⟨ suc fst , x -→S snd ⟩ , t ⟩ ⟩
 
 h-sc : ∀ {P R Q c₁ c₂} 
-    → ⦃| P |⦄ c₁ ⦃| R |⦄
-    → ⦃| R |⦄ c₂ ⦃| Q |⦄
-    ---------------------
-    → ⦃| P |⦄ c₁ ; c₂ ⦃| Q |⦄
-h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = form λ {⟨ fst , snd ⟩ P → 
+  → ⦃| P |⦄ c₁ ⦃| R |⦄
+  → ⦃| R |⦄ c₂ ⦃| Q |⦄
+  ---------------------
+  → ⦃| P |⦄ c₁ ; c₂ ⦃| Q |⦄
+h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
+  form λ {⟨ fst , snd ⟩ P → 
     let ⟨ σ , ⟨ c₁-→skip , c₂-→skip ⟩ ⟩ = sc-sp snd 
         P→R = c₁-→skip→P→R c₁-→skip
         R→Q = c₂-→skip→R→Q c₂-→skip
-     in R→Q (P→R P)}
+      in R→Q (P→R P)}
 
 h-cd : ∀ {b P Q c₁ c₂}
-    → ⦃| P && A b |⦄ c₁ ⦃| Q |⦄
-    → ⦃| P && ! A b |⦄ c₂ ⦃| Q |⦄
-    ----------------------------
-    → ⦃| P |⦄ `if b `then c₁ `else c₂ ⦃| Q |⦄
+  → ⦃| P && A b |⦄ c₁ ⦃| Q |⦄
+  → ⦃| P && ! A b |⦄ c₂ ⦃| Q |⦄
+  ----------------------------
+  → ⦃| P |⦄ `if b `then c₁ `else c₂ ⦃| Q |⦄
 h-cd (form caseT) (form caseF) =
-    form λ {⟨ suc _ , `if-true x -→S snd ⟩ Pst → caseT (form-→* snd) ⟨ Pst , x ⟩
-          ; ⟨ suc _ , `if-false x -→S snd ⟩ Pst → caseF (form-→* snd) ⟨ Pst , notTrue x ⟩}
+  form λ {⟨ suc _ , `if-true x -→S snd ⟩ Pst → caseT (form-→* snd) ⟨ Pst , x ⟩
+       ; ⟨ suc _ , `if-false x -→S snd ⟩ Pst → caseF (form-→* snd) ⟨ Pst , notTrue x ⟩}
+
+h-wh : ∀ {i b c} 
+  → ⦃| i && A b |⦄ c ⦃| i |⦄
+  ----------------------------
+  → ⦃| i |⦄ `while b `do c ⦃| i && ! A b |⦄
+h-wh {i} {b} {c} (form x) = form f
+  where
+    f : ∀ {st st'} → ⟨ C (`while b `do c) , st ⟩ -→* ⟨ C skip , st' ⟩ → i st → (i && ! A b) st'
+    f ⟨ suc .0 , `while-false bf -→S -→Z ⟩ x₁ = ⟨ x₁ , notTrue bf ⟩
+    f ⟨ suc .(suc (suc _)) , `while-true bt -→S ;-exec -→S snd@(_-→S_ {n = n} _ _) ⟩ x₁ = f ⟨ suc n , snd ⟩  x₁ 
+    f ⟨ suc .(suc _) , `while-true bt -→S sd@(;-left _ -→S _) ⟩ x₁ with sc-sp sd 
+    ... | ⟨ fst , ⟨ k , k₁ ⟩ ⟩ = 
+      let kk = x k ⟨ x₁ , bt ⟩ 
+          kkk = f k₁ kk in kkk
+    -- f ⟨ suc .(suc _) , `while-true bt -→S ;-left c→c₀' -→S snd ⟩ x₁ with sc-sp snd 
+    -- ... | ⟨ s , ⟨ ⟨ n , c₀'→*sk ⟩ , w-b-do-c→*sk ⟩ ⟩ = 
+    --   let k = c→c₀' -→S c₀'→*sk 
+    --       kk = x ⟨ (suc n) , k ⟩ ⟨ x₁ , bt ⟩ 
+    --       kkk = f w-b-do-c→*sk kk in kkk
 
 _ : ⦃| TRUE |⦄ X := N 0 ⦃| _X !< N 5 |⦄
 _ = h-sp (form λ x → s≤s z≤n) h-:=
@@ -135,20 +155,29 @@ _ = h-sp (form (λ x → tt))
 
 _ : ⦃| TRUE |⦄ 
     `if _X `= N 0 
-    `then Y := N 2 
-    `else (Y := _X `+ N 1) 
+      `then Y := N 2 
+      `else (Y := _X `+ N 1) 
     ⦃| _X <= _Y |⦄
-_ = h-cd (h-sp l (h-sp f h-:= )) (h-sp l (h-sp (form λ x → k) h-:=))
-    where 
-        l : ∀ {P} → TRUE && P ⇒ P
-        l = form proj₂
+_ = h-cd (h-sp &&-elim (h-sp f h-:=)) (h-sp &&-elim (h-sp (form λ x → k) h-:=))
+  where 
+    g : ∀ {a b : ℕ} → T (a ≡ᵇ b) → a ≡ b
+    g {a} {b} = ≡ᵇ⇒≡ a b
 
-        g : ∀ {a b : ℕ} → T (a ≡ᵇ b) → a ≡ b
-        g {a} {b} = ≡ᵇ⇒≡ a b
+    f : A (_X `= N 0) ⇒ (_X <= _Y) [ Y ↦ N 2 ]
+    f = form λ x → ≤-trans (≤-reflexive (g x)) z≤n
+    
+    k : ∀ {x} → x ≤ x + 1
+    k {zero} = z≤n
+    k {suc x} = s≤s k
 
-        f : A (_X `= N 0) ⇒ (_X <= _Y) [ Y ↦ N 2 ]
-        f = form λ x → ≤-trans (≤-reflexive (g x)) z≤n
-        
-        k : ∀ {x} → x ≤ x + 1
-        k {zero} = z≤n
-        k {suc x} = s≤s k
+_ : ⦃| TRUE |⦄
+    `if (_X `≤ _Y)
+      `then (Z := _Y `- _X)
+      `else (Y := _X `+ _Z)
+    ⦃| _Y == _X `+ _Z |⦄
+_ = h-cd (h-sp &&-elim (h-sp (form (sym ∘ m+[n∸m]≡n ∘ g)) h-:=)) 
+         (h-sp &&-elim (h-sp (form (λ x → refl)) h-:=)) 
+  where
+    g : ∀ {x y} → T ((x <ᵇ y) ∨ (x ≡ᵇ y)) → x ≤ y 
+    g {zero} {y} x₁ = z≤n
+    g {suc x} {suc y} x₁ = s≤s (g x₁)
