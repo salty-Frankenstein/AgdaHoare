@@ -62,7 +62,7 @@ data _⇒_ : Assertion → Assertion → Set where
 
 data ⦃|_|⦄_⦃|_|⦄ : Assertion → Comm → Assertion → Set where
   form : ∀ {P c Q}
-    → (∀ {st st'} → ⟨ C c , st ⟩ -→* ⟨ C skip , st' ⟩ → P st → Q st')
+    → (∀ {st st'} → ⟨ c , st ⟩ -→* ⟨ skip , st' ⟩ → P st → Q st')
     → ⦃| P |⦄ c ⦃| Q |⦄
 
 infix 1 ⦃|_|⦄_⦃|_|⦄
@@ -91,14 +91,6 @@ h-:= = form λ {⟨ suc .0 , :=-exec -→S -→Z ⟩ x₁ → x₁}
 h-sk : ∀ {P} → ⦃| P |⦄ skip ⦃| P |⦄
 h-sk = form (λ {⟨ .0 , -→Z ⟩ x₁ → x₁})
 
-sc-sp : ∀ {c₁ c₂ s s' n} 
-  → ⟨ C (c₁ ; c₂) , s ⟩ >- n -→ ⟨ C skip , s' ⟩ 
-  -------------------------------------------------------------------------------------
-  → ∃[ s₂ ] ((⟨ C c₁ , s ⟩ -→* ⟨ C skip , s₂ ⟩) × (⟨ C c₂ , s₂ ⟩ -→* ⟨ C skip , s' ⟩))
-sc-sp {.skip} {c₂} {s} {s'} {(suc n)} (;-exec -→S x₁) = ⟨ s , ⟨ ⟨ 0 , -→Z ⟩ , ⟨ n , x₁ ⟩ ⟩ ⟩
-sc-sp {c₁} {c₂} {s} {s'} {(suc n)} (;-left x -→S x₁) with sc-sp x₁
-... | ⟨ s₂ , ⟨ ⟨ fst , snd ⟩ , t ⟩ ⟩ = ⟨ s₂ , ⟨ ⟨ suc fst , x -→S snd ⟩ , t ⟩ ⟩
-
 h-sc : ∀ {P R Q c₁ c₂} 
   → ⦃| P |⦄ c₁ ⦃| R |⦄
   → ⦃| R |⦄ c₂ ⦃| Q |⦄
@@ -106,10 +98,16 @@ h-sc : ∀ {P R Q c₁ c₂}
   → ⦃| P |⦄ c₁ ; c₂ ⦃| Q |⦄
 h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
   form λ {⟨ fst , snd ⟩ P → 
-    let ⟨ σ , ⟨ c₁-→skip , c₂-→skip ⟩ ⟩ = sc-sp snd 
-        P→R = c₁-→skip→P→R c₁-→skip
-        R→Q = c₂-→skip→R→Q c₂-→skip
+    let ⟨ _ , ⟨ _ , ⟨ _ , ⟨ c₁-→skip , ⟨ c₂-→skip , _ ⟩ ⟩ ⟩ ⟩ ⟩ = sc-sp snd 
+        P→R = c₁-→skip→P→R (form-→* c₁-→skip)
+        R→Q = c₂-→skip→R→Q (form-→* c₂-→skip)
       in R→Q (P→R P)}
+-- h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
+--   form λ {⟨ fst , snd ⟩ P → 
+--     let ⟨ σ , ⟨ c₁-→skip , c₂-→skip ⟩ ⟩ = sc-sp snd 
+--         P→R = c₁-→skip→P→R c₁-→skip
+--         R→Q = c₂-→skip→R→Q c₂-→skip
+--       in R→Q (P→R P)}
 
 h-cd : ∀ {b P Q c₁ c₂}
   → ⦃| P && A b |⦄ c₁ ⦃| Q |⦄
@@ -126,13 +124,21 @@ h-wh : ∀ {i b c}
   → ⦃| i |⦄ `while b `do c ⦃| i && ! A b |⦄
 h-wh {i} {b} {c} (form x) = form f
   where
-    f : ∀ {st st'} → ⟨ C (`while b `do c) , st ⟩ -→* ⟨ C skip , st' ⟩ → i st → (i && ! A b) st'
+    f : ∀ {st st'} → ⟨ `while b `do c , st ⟩ -→* ⟨ skip , st' ⟩ → i st → (i && ! A b) st'
     f ⟨ suc .0 , `while-false bf -→S -→Z ⟩ x₁ = ⟨ x₁ , notTrue bf ⟩
     f ⟨ suc .(suc (suc _)) , `while-true bt -→S ;-exec -→S snd@(_-→S_ {n = n} _ _) ⟩ x₁ = f ⟨ suc n , snd ⟩  x₁ 
     f ⟨ suc .(suc _) , `while-true bt -→S sd@(;-left _ -→S _) ⟩ x₁ with sc-sp sd 
-    ... | ⟨ fst , ⟨ k , k₁ ⟩ ⟩ = 
-      let kk = x k ⟨ x₁ , bt ⟩ 
-          kkk = f k₁ kk in kkk
+    ... | ⟨ s , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , refl ⟩ ⟩ ⟩ ⟩ ⟩ = 
+      let t1 = x (form-→* fst) ⟨ x₁ , bt ⟩ 
+          kkk = f (form-→* snd) t1
+       in kkk
+      -- let kk = x k ⟨ x₁ , bt ⟩ 
+          -- kkk = f k₁ kk in {!   !}
+
+    g : ∀ {st st'} → ⟨ `while b `do c , st ⟩ ⇓ st' → i st → (i && ! A b) st'
+    g (`while-false x) x₁ = ⟨ x₁ , (notTrue x) ⟩
+    g (`while-true x x₂ x₃) x₁ = let k = g x₃ in {!  !}
+
     -- f ⟨ suc .(suc _) , `while-true bt -→S ;-left c→c₀' -→S snd ⟩ x₁ with sc-sp snd 
     -- ... | ⟨ s , ⟨ ⟨ n , c₀'→*sk ⟩ , w-b-do-c→*sk ⟩ ⟩ = 
     --   let k = c→c₀' -→S c₀'→*sk 

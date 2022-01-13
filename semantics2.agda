@@ -70,47 +70,48 @@ _ : evalI (modify σ₀ "x" 1) (N 1 `+ Var "x") ≡ 2
 _ = refl
 
 {- small step -}
-data _-→_ : Stmt × State → Stmt × State → Set where
+data _-→_ : Comm × State → Comm × State → Set where
   :=-exec : ∀ {x n σ}
     --------------------------------------------------------
-    → ⟨ C (x := n) , σ ⟩ -→ ⟨ C skip , modify σ x (evalI σ n) ⟩ 
+    → ⟨ x := n , σ ⟩ -→ ⟨ skip , modify σ x (evalI σ n) ⟩ 
 
   ;-left : ∀ {c₀ c₀′ σ σ′ c₁}
-    → ⟨ C c₀ , σ ⟩ -→ ⟨ C c₀′ , σ′ ⟩ 
+    → ⟨ c₀ , σ ⟩ -→ ⟨ c₀′ , σ′ ⟩ 
     -------------------------------------
-    → ⟨ C (c₀ ; c₁) , σ ⟩ -→ ⟨ C (c₀′ ; c₁) , σ′ ⟩ 
+    → ⟨ c₀ ; c₁ , σ ⟩ -→ ⟨ c₀′ ; c₁ , σ′ ⟩ 
 
   ;-exec : ∀ {c₁ σ}
     ---------------------------------
-    → ⟨ C (skip ; c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
+    → ⟨ skip ; c₁ , σ ⟩ -→ ⟨ c₁ , σ ⟩ 
 
   `if-true : ∀ {b c₀ c₁ σ}
     → T (evalB σ b)
     ------------------------------------------------------
-    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₀ , σ ⟩ 
+    → ⟨ `if b `then c₀ `else c₁ , σ ⟩ -→ ⟨ c₀ , σ ⟩ 
 
   `if-false : ∀ {b c₀ c₁ σ}
     → T (not (evalB σ b))
     -------------------------------------------------------
-    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ -→ ⟨ C c₁ , σ ⟩ 
+    → ⟨ `if b `then c₀ `else c₁ , σ ⟩ -→ ⟨ c₁ , σ ⟩ 
 
   `while-true : ∀ {b c σ}
     → T (evalB σ b)
     --------------------------------------------------------------
-    → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C (c ; `while b `do c) , σ ⟩ 
+    → ⟨ `while b `do c , σ ⟩ -→ ⟨ c ; `while b `do c , σ ⟩ 
 
   `while-false : ∀ {b c σ}
     → T (not (evalB σ b))
     ----------------------------------------------
-    → ⟨ C (`while b `do c) , σ ⟩ -→ ⟨ C skip , σ ⟩ 
+    → ⟨ `while b `do c , σ ⟩ -→ ⟨ skip , σ ⟩ 
 
 infix  2 _-→*_
 infix  1 `begin_
 infixr 2 _-→⟨_⟩_
+infixr 2 _-→*⟨_⟩_
 infix  3 _`∎
 
 infixr  2 _-→S_
-data _>-_-→_ : Stmt × State → ℕ → Stmt × State → Set where
+data _>-_-→_ : Comm × State → ℕ → Comm × State → Set where
   -→Z : ∀ {M}
     → M >- 0 -→  M
   
@@ -120,7 +121,7 @@ data _>-_-→_ : Stmt × State → ℕ → Stmt × State → Set where
     → L >- (suc n) -→ N
 
 
-_-→*_ : Stmt × State → Stmt × State → Set 
+_-→*_ : Comm × State → Comm × State → Set 
 M' -→* N' = ∃[ n ] (M' >- n -→ N')
   
 form-→* : ∀ {M N n} 
@@ -134,18 +135,47 @@ form-→* s@(_-→S_ {n = n} _ _) = ⟨ suc n , s ⟩
 --     → (x : M >- n -→ N)
 --     → M -→* N 
 
+-→*-refl : ∀ {M}
+  ---------
+  → M -→* M
+-→*-refl = ⟨ 0 , -→Z ⟩
+
+-→*-trans : ∀ {L M N}
+  → L -→* M
+  → M -→* N 
+  ----------
+  → L -→* N 
+-→*-trans ⟨ .0 , -→Z ⟩ x₁ = x₁
+-→*-trans ⟨ (suc n) , x -→S snd ⟩ x₁ with -→*-trans ⟨ n , snd ⟩ x₁
+... | ⟨ fst , snd₁ ⟩ = ⟨ suc fst , (x -→S snd₁) ⟩
+
+-→trans-→* : ∀ {L M N}
+  → L -→ M
+  → M -→* N
+  ----------
+  → L -→* N
+-→trans-→* x ⟨ .0 , -→Z ⟩ = ⟨ 1 , x -→S -→Z ⟩
+-→trans-→* x ⟨ suc n , x₁ -→S x₂ ⟩ = ⟨ suc (suc n) , x -→S x₁ -→S x₂ ⟩
+
 _`∎ : ∀ M
   ---------
   → M -→* M
-x `∎ = ⟨ 0 , -→Z ⟩
+x `∎ = -→*-refl
 
 _-→⟨_⟩_ : ∀ L {M N}
   → L -→ M
   → M -→* N 
   ----------
   → L -→* N
-x -→⟨ x-→y ⟩ ⟨ .0 , -→Z ⟩ = ⟨ 1 , x-→y -→S -→Z ⟩
-x -→⟨ x-→y ⟩ ⟨ (suc n) , x₁ -→S x₂ ⟩ = ⟨ suc (suc n) , x-→y -→S x₁ -→S x₂ ⟩
+x -→⟨ x-→y ⟩ z = -→trans-→* x-→y z
+
+_-→*⟨_⟩_ : ∀ L {M N}
+  → L -→* M
+  → M -→* N 
+  ----------
+  → L -→* N 
+x -→*⟨ x-→*y ⟩ z = -→*-trans x-→*y z
+
 -- x -→⟨ x-→y ⟩ -→Z = (x-→y -→S -→Z)
 -- x -→⟨ x-→y ⟩ (x₁ -→S x₂) = (x-→y -→S x₁ -→S x₂)
 
@@ -156,37 +186,108 @@ x -→⟨ x-→y ⟩ ⟨ (suc n) , x₁ -→S x₂ ⟩ = ⟨ suc (suc n) , x-→
 `begin M-→*N = M-→*N 
 
 {- big step -}
-data _⇓_ : Stmt × State → State → Set where
+data _⇓_ : Comm × State → State → Set where
+  skip-exec : ∀ {σ}
+    -------------------
+    → ⟨ skip , σ ⟩ ⇓ σ 
+
   :=-exec : ∀ {x n σ}
   ----------------------------------------------
-    → ⟨ C (x := n) , σ ⟩ ⇓ modify σ x (evalI σ n) 
+    → ⟨ x := n , σ ⟩ ⇓ modify σ x (evalI σ n) 
 
   ;-exec : ∀ {c₀ c₁ σ σ' σ''}
-    → ⟨ C c₀ , σ ⟩ ⇓ σ'
-    → ⟨ C c₁ , σ' ⟩ ⇓ σ''
+    → ⟨ c₀ , σ ⟩ ⇓ σ'
+    → ⟨ c₁ , σ' ⟩ ⇓ σ''
     ---------------------------------
-    → ⟨ C (c₀ ; c₁) , σ ⟩ ⇓ σ''
+    → ⟨ c₀ ; c₁ , σ ⟩ ⇓ σ''
 
   `if-true : ∀ {b c₀ c₁ σ σ'}
     → T (evalB σ b)
-    → ⟨ C c₀ , σ ⟩ ⇓ σ'
+    → ⟨ c₀ , σ ⟩ ⇓ σ'
     -------------------------------------------
-    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ ⇓ σ'
+    → ⟨ `if b `then c₀ `else c₁ , σ ⟩ ⇓ σ'
 
   `if-false : ∀ {b c₀ c₁ σ σ'}
     → T (not (evalB σ b))
-    → ⟨ C c₁ , σ ⟩ ⇓ σ'
+    → ⟨ c₁ , σ ⟩ ⇓ σ'
     -------------------------------------------
-    → ⟨ C (`if b `then c₀ `else c₁) , σ ⟩ ⇓ σ'
+    → ⟨ `if b `then c₀ `else c₁ , σ ⟩ ⇓ σ'
 
   `while-true : ∀ {b c σ σ' σ''}
     → T (evalB σ b)
-    → ⟨ C c , σ ⟩ ⇓ σ'
-    → ⟨ C (`while b `do c) , σ' ⟩ ⇓ σ''
+    → ⟨ c , σ ⟩ ⇓ σ'
+    → ⟨ `while b `do c , σ' ⟩ ⇓ σ''
     --------------------------------------------------------------
-    → ⟨ C (`while b `do c) , σ ⟩ ⇓ σ''
+    → ⟨ `while b `do c , σ ⟩ ⇓ σ''
 
   `while-false : ∀ {b c σ}
     → T (not (evalB σ b))
     ----------------------------------
-    → ⟨ C (`while b `do c) , σ ⟩ ⇓ σ 
+    → ⟨ `while b `do c , σ ⟩ ⇓ σ 
+
+;-local : ∀ {c₁ s s' c'} 
+  → ⟨ c₁ , s ⟩ -→* ⟨ c' , s' ⟩ 
+  → (c₂ : Comm)
+  --------------------------------------
+  → ⟨ c₁ ; c₂ , s ⟩ -→* ⟨ c' ; c₂ , s' ⟩ 
+;-local ⟨ .0 , -→Z ⟩ c₂ = -→*-refl
+;-local ⟨ suc m , x -→S snd ⟩ c₂ with ;-local ⟨ m , snd ⟩ c₂
+... | ⟨ _ , snd₁ ⟩ = form-→* (;-left x -→S snd₁)
+
+sc-mg : ∀ {c₁ c₂ s s' s₂ t} 
+  → ⟨ c₁ , s ⟩ -→* ⟨ skip , s₂ ⟩ → ⟨ c₂ , s₂ ⟩ -→* ⟨ t , s' ⟩
+  → ⟨ c₁ ; c₂ , s ⟩ -→* ⟨ t , s' ⟩ 
+sc-mg {c₁} {c₂} {s} {s'} {s₂} {t} x x₁ = 
+  `begin 
+    ⟨ c₁ ; c₂ , s ⟩
+  -→*⟨ ;-local x c₂ ⟩  
+    ⟨ skip ; c₂ , s₂ ⟩
+  -→⟨ ;-exec ⟩ 
+    ⟨ c₂ , s₂ ⟩
+  -→*⟨ x₁ ⟩
+    ⟨ t , s' ⟩
+  `∎
+
+sc-mg' : ∀ {c₁ c₂ s s' s₂} 
+  → ⟨ c₁ , s ⟩ -→* ⟨ skip , s₂ ⟩ → ⟨ c₂ , s₂ ⟩ -→* ⟨ skip , s' ⟩
+  → ⟨ c₁ ; c₂ , s ⟩ -→* ⟨ skip , s' ⟩ 
+sc-mg' = sc-mg
+
+sc-sp : ∀ {c₁ c₂ s s' n} 
+  → ⟨ c₁ ; c₂ , s ⟩ >- n -→ ⟨ skip , s' ⟩ 
+  -------------------------------------------------------------------------------------
+  → ∃[ s₂ ] ∃[ a ] ∃[ b ] ((⟨ c₁ , s ⟩ >- a -→ ⟨ skip , s₂ ⟩) 
+                            × (⟨ c₂ , s₂ ⟩ >- b -→ ⟨ skip , s' ⟩) 
+                            × suc (a + b) ≡ n)
+sc-sp {.skip} {c₂} {s} {s'} {suc n} (;-exec -→S x₁) = ⟨ s , ⟨ 0 , ⟨ n , ⟨ -→Z , ⟨ x₁ , refl ⟩ ⟩ ⟩ ⟩ ⟩
+sc-sp {c₁} {c₂} {s} {s'} {suc n} (;-left x -→S x₁) with sc-sp x₁
+... | ⟨ s₂ , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , sab≡n ⟩ ⟩ ⟩ ⟩ ⟩ = 
+  ⟨ s₂ , ⟨ (suc a) , ⟨ b , ⟨ (x -→S fst) , ⟨ snd , cong suc sab≡n ⟩ ⟩ ⟩ ⟩ ⟩
+
+
+-- sc-sp {.skip} {c₂} {s} {s'} {(suc n)} (;-exec -→S x₁) = ⟨ s , ⟨ ⟨ 0 , -→Z ⟩ , ⟨ n , x₁ ⟩ ⟩ ⟩
+-- sc-sp {c₁} {c₂} {s} {s'} {(suc n)} (;-left x -→S x₁) with sc-sp x₁
+-- ... | ⟨ s₂ , ⟨ ⟨ fst , snd ⟩ , t ⟩ ⟩ = ⟨ s₂ , ⟨ ⟨ suc fst , x -→S snd ⟩ , t ⟩ ⟩
+
+big→small : ∀ {c σ σ'}
+  → ⟨ c , σ ⟩ ⇓ σ'
+  → ⟨ c , σ ⟩ -→* ⟨ skip , σ' ⟩ 
+big→small skip-exec = -→*-refl
+big→small :=-exec = -→trans-→* :=-exec -→*-refl
+big→small (;-exec x x₁) = sc-mg (big→small x) (big→small x₁)
+big→small (`if-true x x₁) = -→trans-→* (`if-true x) (big→small x₁)
+big→small (`if-false x x₁) = -→trans-→* (`if-false x) (big→small x₁)
+big→small (`while-true x x₁ x₂) = -→trans-→* (`while-true x) (sc-mg (big→small x₁) (big→small x₂))
+big→small (`while-false x) = -→trans-→* (`while-false x) -→*-refl
+
+-- small→big : ∀ {c σ σ'}
+--   → ⟨ c , σ ⟩ -→* ⟨ skip , σ' ⟩ 
+--   → ⟨ c , σ ⟩ ⇓ σ'
+-- small→big ⟨ .0 , -→Z ⟩ = skip-exec
+-- small→big ⟨ .1 , :=-exec -→S -→Z ⟩ = :=-exec
+-- small→big ⟨ .(suc _) , ;-left x -→S snd ⟩ = {!   !}
+-- small→big ⟨ .(suc _) , ;-exec -→S snd ⟩ = {!   !}
+-- small→big ⟨ .(suc _) , `if-true x -→S snd ⟩ = {!   !}
+-- small→big ⟨ .(suc _) , `if-false x -→S snd ⟩ = {!   !}
+-- small→big ⟨ .(suc _) , `while-true x -→S snd ⟩ = {!   !}
+-- small→big ⟨ .(suc _) , `while-false x -→S snd ⟩ = {!   !}
