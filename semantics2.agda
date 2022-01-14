@@ -1,5 +1,6 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc; _+_; _∸_; _<?_; _≤?_; _<ᵇ_; _≡ᵇ_) renaming (_≟_ to _=?_)
+open import Data.Nat using (ℕ; zero; suc; _+_; _∸_; _<?_; _≤?_; _<ᵇ_; _≡ᵇ_; _<_; _≤_; z≤n; s≤s) renaming (_≟_ to _=?_)
+open import Data.Nat.Properties using (≤-refl; m+n≤o⇒m≤o; ∸-monoˡ-≤; n≤1+n; ≤-step; ≤-trans)
 open import Data.String using (String; _≟_)
 open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
 open import Data.List using (List; _∷_; [])
@@ -256,18 +257,50 @@ sc-mg' = sc-mg
 sc-sp : ∀ {c₁ c₂ s s' n} 
   → ⟨ c₁ ; c₂ , s ⟩ >- n -→ ⟨ skip , s' ⟩ 
   -------------------------------------------------------------------------------------
+  → ∃[ s₂ ] ((⟨ c₁ , s ⟩ -→* ⟨ skip , s₂ ⟩) × (⟨ c₂ , s₂ ⟩ -→* ⟨ skip , s' ⟩))
+sc-sp {s = s} (;-exec -→S x₁) = ⟨ s , ⟨ -→*-refl , (form-→* x₁) ⟩ ⟩
+sc-sp (;-left x -→S x₁) with sc-sp x₁ 
+... | ⟨ s₂ , ⟨ ⟨ fst , snd ⟩ , t ⟩ ⟩ = ⟨ s₂ , ⟨ (-→trans-→* x (form-→* snd)) , t ⟩ ⟩
+
+sc-sp' : ∀ {c₁ c₂ s s' n} 
+  → ⟨ c₁ ; c₂ , s ⟩ >- n -→ ⟨ skip , s' ⟩ 
+  -------------------------------------------------------------------------------------
   → ∃[ s₂ ] ∃[ a ] ∃[ b ] ((⟨ c₁ , s ⟩ >- a -→ ⟨ skip , s₂ ⟩) 
                             × (⟨ c₂ , s₂ ⟩ >- b -→ ⟨ skip , s' ⟩) 
-                            × suc (a + b) ≡ n)
-sc-sp {.skip} {c₂} {s} {s'} {suc n} (;-exec -→S x₁) = ⟨ s , ⟨ 0 , ⟨ n , ⟨ -→Z , ⟨ x₁ , refl ⟩ ⟩ ⟩ ⟩ ⟩
-sc-sp {c₁} {c₂} {s} {s'} {suc n} (;-left x -→S x₁) with sc-sp x₁
-... | ⟨ s₂ , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , sab≡n ⟩ ⟩ ⟩ ⟩ ⟩ = 
-  ⟨ s₂ , ⟨ (suc a) , ⟨ b , ⟨ (x -→S fst) , ⟨ snd , cong suc sab≡n ⟩ ⟩ ⟩ ⟩ ⟩
+                            × (a < n × b < n))
+sc-sp' {.skip} {c₂} {s} {s'} {suc n} (;-exec -→S x₁) = 
+  ⟨ s , ⟨ 0 , ⟨ n , ⟨ -→Z , ⟨ x₁ , ⟨ s≤s z≤n , s≤s ≤-refl ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
+sc-sp' {c₁} {c₂} {s} {s'} {suc n} (;-left x -→S x₁) with sc-sp' x₁
+... | ⟨ s₂ , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , ⟨ a<n , b<n ⟩ ⟩ ⟩ ⟩ ⟩ ⟩ = 
+  ⟨ s₂ , ⟨ (suc a) , ⟨ b , ⟨ (x -→S fst) , ⟨ snd , ⟨ s≤s a<n , ≤-step b<n ⟩ ⟩ ⟩ ⟩ ⟩ ⟩
 
-
--- sc-sp {.skip} {c₂} {s} {s'} {(suc n)} (;-exec -→S x₁) = ⟨ s , ⟨ ⟨ 0 , -→Z ⟩ , ⟨ n , x₁ ⟩ ⟩ ⟩
--- sc-sp {c₁} {c₂} {s} {s'} {(suc n)} (;-left x -→S x₁) with sc-sp x₁
--- ... | ⟨ s₂ , ⟨ ⟨ fst , snd ⟩ , t ⟩ ⟩ = ⟨ s₂ , ⟨ ⟨ suc fst , x -→S snd ⟩ , t ⟩ ⟩
+small→big' : ∀ {c σ σ'}
+  → (n m : ℕ)
+  → n ≤ m 
+  → ⟨ c , σ ⟩ >- n -→ ⟨ skip , σ' ⟩
+  → ⟨ c , σ ⟩ ⇓ σ'
+small→big' .0 m z≤n -→Z = skip-exec
+small→big' .1 (suc m) (s≤s x₁) (:=-exec -→S -→Z) = :=-exec
+small→big' .(suc _) (suc m) (s≤s x₁) (;-left x -→S x₂) with sc-sp' x₂
+... | ⟨ s , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , ⟨ sa≤n , sb≤n ⟩ ⟩ ⟩ ⟩ ⟩ ⟩ = 
+  ;-exec (small→big' (suc a) m (≤-trans sa≤n x₁) (x -→S fst)) 
+         (small→big' b m (≤-trans (≤-trans (n≤1+n b) sb≤n) x₁) snd)
+small→big' (suc n) (suc m) (s≤s x₁) (;-exec -→S x₂) = 
+  ;-exec (small→big' 0 m z≤n -→Z) (small→big' n m x₁ x₂)
+small→big' (suc n) (suc m) (s≤s x₁) (`if-true x -→S x₂) = 
+  `if-true x (small→big' n m x₁ x₂)
+small→big' (suc n) (suc m) (s≤s x₁) (`if-false x -→S x₂) = 
+  `if-false x (small→big' n m x₁ x₂)
+small→big' .(suc _) (suc m) (s≤s x₁) (`while-true x -→S x₂) with sc-sp' x₂
+... | ⟨ s , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , ⟨ sa≤n , sb≤n ⟩ ⟩ ⟩ ⟩ ⟩ ⟩ =
+  `while-true x (small→big' a m (≤-trans (≤-trans (n≤1+n a) sa≤n) x₁) fst) 
+                (small→big' b m (≤-trans (≤-trans (n≤1+n b) sb≤n) x₁) snd)
+small→big' .1 (suc m) (s≤s x₁) (`while-false x -→S -→Z) = `while-false x
+  
+small→big : ∀ {c σ σ'}
+  → ⟨ c , σ ⟩ -→* ⟨ skip , σ' ⟩ 
+  → ⟨ c , σ ⟩ ⇓ σ'
+small→big ⟨ n , snd ⟩ = small→big' n n ≤-refl snd
 
 big→small : ∀ {c σ σ'}
   → ⟨ c , σ ⟩ ⇓ σ'
@@ -279,15 +312,3 @@ big→small (`if-true x x₁) = -→trans-→* (`if-true x) (big→small x₁)
 big→small (`if-false x x₁) = -→trans-→* (`if-false x) (big→small x₁)
 big→small (`while-true x x₁ x₂) = -→trans-→* (`while-true x) (sc-mg (big→small x₁) (big→small x₂))
 big→small (`while-false x) = -→trans-→* (`while-false x) -→*-refl
-
--- small→big : ∀ {c σ σ'}
---   → ⟨ c , σ ⟩ -→* ⟨ skip , σ' ⟩ 
---   → ⟨ c , σ ⟩ ⇓ σ'
--- small→big ⟨ .0 , -→Z ⟩ = skip-exec
--- small→big ⟨ .1 , :=-exec -→S -→Z ⟩ = :=-exec
--- small→big ⟨ .(suc _) , ;-left x -→S snd ⟩ = {!   !}
--- small→big ⟨ .(suc _) , ;-exec -→S snd ⟩ = {!   !}
--- small→big ⟨ .(suc _) , `if-true x -→S snd ⟩ = {!   !}
--- small→big ⟨ .(suc _) , `if-false x -→S snd ⟩ = {!   !}
--- small→big ⟨ .(suc _) , `while-true x -→S snd ⟩ = {!   !}
--- small→big ⟨ .(suc _) , `while-false x -→S snd ⟩ = {!   !}

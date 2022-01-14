@@ -98,16 +98,10 @@ h-sc : ∀ {P R Q c₁ c₂}
   → ⦃| P |⦄ c₁ ; c₂ ⦃| Q |⦄
 h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
   form λ {⟨ fst , snd ⟩ P → 
-    let ⟨ _ , ⟨ _ , ⟨ _ , ⟨ c₁-→skip , ⟨ c₂-→skip , _ ⟩ ⟩ ⟩ ⟩ ⟩ = sc-sp snd 
-        P→R = c₁-→skip→P→R (form-→* c₁-→skip)
-        R→Q = c₂-→skip→R→Q (form-→* c₂-→skip)
+    let ⟨ σ , ⟨ c₁-→skip , c₂-→skip ⟩ ⟩ = sc-sp snd 
+        P→R = c₁-→skip→P→R c₁-→skip
+        R→Q = c₂-→skip→R→Q c₂-→skip
       in R→Q (P→R P)}
--- h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
---   form λ {⟨ fst , snd ⟩ P → 
---     let ⟨ σ , ⟨ c₁-→skip , c₂-→skip ⟩ ⟩ = sc-sp snd 
---         P→R = c₁-→skip→P→R c₁-→skip
---         R→Q = c₂-→skip→R→Q c₂-→skip
---       in R→Q (P→R P)}
 
 h-cd : ∀ {b P Q c₁ c₂}
   → ⦃| P && A b |⦄ c₁ ⦃| Q |⦄
@@ -122,28 +116,11 @@ h-wh : ∀ {i b c}
   → ⦃| i && A b |⦄ c ⦃| i |⦄
   ----------------------------
   → ⦃| i |⦄ `while b `do c ⦃| i && ! A b |⦄
-h-wh {i} {b} {c} (form x) = form f
+h-wh {i} {b} {c} (form x) = form (f ∘ small→big)
   where
-    f : ∀ {st st'} → ⟨ `while b `do c , st ⟩ -→* ⟨ skip , st' ⟩ → i st → (i && ! A b) st'
-    f ⟨ suc .0 , `while-false bf -→S -→Z ⟩ x₁ = ⟨ x₁ , notTrue bf ⟩
-    f ⟨ suc .(suc (suc _)) , `while-true bt -→S ;-exec -→S snd@(_-→S_ {n = n} _ _) ⟩ x₁ = f ⟨ suc n , snd ⟩  x₁ 
-    f ⟨ suc .(suc _) , `while-true bt -→S sd@(;-left _ -→S _) ⟩ x₁ with sc-sp sd 
-    ... | ⟨ s , ⟨ a , ⟨ b , ⟨ fst , ⟨ snd , refl ⟩ ⟩ ⟩ ⟩ ⟩ = 
-      let t1 = x ⟨ a , fst ⟩ ⟨ x₁ , bt ⟩ 
-       in f ⟨ b , snd ⟩ t1
-       
-      -- let kk = x k ⟨ x₁ , bt ⟩ 
-          -- kkk = f k₁ kk in {!   !}
-
-    g : ∀ {st st'} → ⟨ `while b `do c , st ⟩ ⇓ st' → i st → (i && ! A b) st'
-    g (`while-false x) x₁ = ⟨ x₁ , (notTrue x) ⟩
-    g (`while-true x x₂ x₃) x₁ = let k = g x₃ in {!  !}
-
-    -- f ⟨ suc .(suc _) , `while-true bt -→S ;-left c→c₀' -→S snd ⟩ x₁ with sc-sp snd 
-    -- ... | ⟨ s , ⟨ ⟨ n , c₀'→*sk ⟩ , w-b-do-c→*sk ⟩ ⟩ = 
-    --   let k = c→c₀' -→S c₀'→*sk 
-    --       kk = x ⟨ (suc n) , k ⟩ ⟨ x₁ , bt ⟩ 
-    --       kkk = f w-b-do-c→*sk kk in kkk
+    f : ∀ {st st'} → ⟨ `while b `do c , st ⟩ ⇓ st' → i st → (i && ! A b) st'
+    f (`while-false bf) x₁ = ⟨ x₁ , (notTrue bf) ⟩
+    f (`while-true bt x₂ x₃) x₁ = (f x₃) (x (big→small x₂) ⟨ x₁ , bt ⟩)
 
 _ : ⦃| TRUE |⦄ X := N 0 ⦃| _X !< N 5 |⦄
 _ = h-sp (form λ x → s≤s z≤n) h-:=
