@@ -12,7 +12,7 @@ open import Data.Empty using (⊥; ⊥-elim)
 open import Function.Base using (_∘_; id)
 
 open import lang
-open import semantics2
+open import semantics
 
 
 Assertion : Set₁ 
