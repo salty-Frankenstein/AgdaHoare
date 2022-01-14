@@ -1,16 +1,14 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n; _<_; _≤_; _≡ᵇ_; _<ᵇ_; _+_; _∸_) renaming (_≟_ to _=?_)
-open import Data.Nat.Properties using (≤-trans; ≤-reflexive; +-monoˡ-<; ≡ᵇ⇒≡; m+[n∸m]≡n)
+open import Data.Nat using (ℕ; zero; suc; s≤s; z≤n; _<_; _≤_; _≡ᵇ_; _<ᵇ_; _+_; _∸_)
+open import Data.Nat.Properties using (≤-trans; ≤-reflexive; +-monoˡ-<; +-monoˡ-≤; ≡ᵇ⇒≡; m+[n∸m]≡n; n≤1+n; +-comm)
 open import Data.String using (String; _≟_)
-open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
+open import Relation.Nullary using (Dec; yes; no; ¬_)
 open import Data.List using (List; _∷_; [])
 open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl; sym; trans; cong)
-import Data.Product using (Σ; _,_; ∃; Σ-syntax; ∃-syntax)
 open import Data.Product using (_×_; proj₁; proj₂; Σ; ∃; Σ-syntax; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 open import Data.Unit using (⊤; tt)
 open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
-open import Relation.Nullary.Decidable using (True; toWitness; fromWitness)
 open import Function.Base using (_∘_; id)
 
 open import lang
@@ -45,10 +43,21 @@ FALSE = λ st → ⊥
 A : BExp → Assertion
 A b = λ st → T (evalB st b)
 
-notTrue : ∀ {x} → T (not x) → ¬ T x
-notTrue {false} tt ()
-notTrue {true} () x₁
+Anot→¬ : ∀ {x} → T (not x) → ¬ T x
+Anot→¬ {false} tt ()
+Anot→¬ {true} () x₁
 
+¬→Anot : ∀ {x} → ¬ T x → T (not x)
+¬→Anot {false} x₁ = tt
+¬→Anot {true} x₁ = x₁ tt
+
+A`≤→≤ : ∀ {x n} → T ((x <ᵇ n) ∨ (x ≡ᵇ n)) → x ≤ n
+A`≤→≤ {zero} {n} x₁ = z≤n
+A`≤→≤ {suc x} {suc n} x₁ = s≤s (A`≤→≤ x₁)
+
+Anot`≤→¬≤ : ∀ {x n} → T (not ((x <ᵇ n) ∨ (x ≡ᵇ n))) → ¬ x ≤ n
+Anot`≤→¬≤ {zero} {zero} () z≤n
+Anot`≤→¬≤ {suc x} {(suc n)} x₁ (s≤s x₂) = Anot`≤→¬≤ x₁ x₂
 
 infixr 0 _⇒_ 
 data _⇒_ : Assertion → Assertion → Set where
@@ -57,8 +66,11 @@ data _⇒_ : Assertion → Assertion → Set where
 ⇒-trans : ∀ {P Q R} → P ⇒ Q → Q ⇒ R → P ⇒ R 
 ⇒-trans (form x) (form x₁) = form (λ x₂ → x₁ (x x₂))
 
-&&-elim : ∀ {P : Assertion} → TRUE && P ⇒ P
-&&-elim = form proj₂
+&&-elimˡ : ∀ {P Q} → P && Q ⇒ P
+&&-elimˡ = form proj₁
+
+&&-elimʳ : ∀ {P Q} → P && Q ⇒ Q
+&&-elimʳ = form proj₂
 
 data ⦃|_|⦄_⦃|_|⦄ : Assertion → Comm → Assertion → Set where
   form : ∀ {P c Q}
@@ -94,7 +106,7 @@ h-sk = form (λ {⟨ .0 , -→Z ⟩ x₁ → x₁})
 h-sc : ∀ {P R Q c₁ c₂} 
   → ⦃| P |⦄ c₁ ⦃| R |⦄
   → ⦃| R |⦄ c₂ ⦃| Q |⦄
-  ---------------------
+  --------------------------
   → ⦃| P |⦄ c₁ ; c₂ ⦃| Q |⦄
 h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) = 
   form λ {⟨ fst , snd ⟩ P → 
@@ -106,21 +118,22 @@ h-sc (form c₁-→skip→P→R) (form c₂-→skip→R→Q) =
 h-cd : ∀ {b P Q c₁ c₂}
   → ⦃| P && A b |⦄ c₁ ⦃| Q |⦄
   → ⦃| P && ! A b |⦄ c₂ ⦃| Q |⦄
-  ----------------------------
+  ------------------------------------------
   → ⦃| P |⦄ `if b `then c₁ `else c₂ ⦃| Q |⦄
 h-cd (form caseT) (form caseF) =
   form λ {⟨ suc _ , `if-true x -→S snd ⟩ Pst → caseT (form-→* snd) ⟨ Pst , x ⟩
-       ; ⟨ suc _ , `if-false x -→S snd ⟩ Pst → caseF (form-→* snd) ⟨ Pst , notTrue x ⟩}
+       ; ⟨ suc _ , `if-false x -→S snd ⟩ Pst → caseF (form-→* snd) ⟨ Pst , Anot→¬ x ⟩}
 
 h-wh : ∀ {i b c} 
   → ⦃| i && A b |⦄ c ⦃| i |⦄
-  ----------------------------
+  ------------------------------------------
   → ⦃| i |⦄ `while b `do c ⦃| i && ! A b |⦄
 h-wh {i} {b} {c} (form x) = form (f ∘ small→big)
   where
     f : ∀ {st st'} → ⟨ `while b `do c , st ⟩ ⇓ st' → i st → (i && ! A b) st'
-    f (`while-false bf) x₁ = ⟨ x₁ , (notTrue bf) ⟩
+    f (`while-false bf) x₁ = ⟨ x₁ , (Anot→¬ bf) ⟩
     f (`while-true bt x₂ x₃) x₁ = (f x₃) (x (big→small x₂) ⟨ x₁ , bt ⟩)
+
 
 _ : ⦃| TRUE |⦄ X := N 0 ⦃| _X !< N 5 |⦄
 _ = h-sp (form λ x → s≤s z≤n) h-:=
@@ -141,26 +154,36 @@ _ : ⦃| TRUE |⦄
       `then Y := N 2 
       `else (Y := _X `+ N 1) 
     ⦃| _X <= _Y |⦄
-_ = h-cd (h-sp &&-elim (h-sp f h-:=)) (h-sp &&-elim (h-sp (form λ x → k) h-:=))
+_ = h-cd (h-sp (⇒-trans &&-elimʳ (form λ x → ≤-trans (≤-reflexive (g x)) z≤n)) h-:=) 
+         (h-sp (⇒-trans &&-elimʳ (form λ x → k)) h-:=)
   where 
     g : ∀ {a b : ℕ} → T (a ≡ᵇ b) → a ≡ b
     g {a} {b} = ≡ᵇ⇒≡ a b
 
-    f : A (_X `= N 0) ⇒ (_X <= _Y) [ Y ↦ N 2 ]
-    f = form λ x → ≤-trans (≤-reflexive (g x)) z≤n
-    
     k : ∀ {x} → x ≤ x + 1
-    k {zero} = z≤n
-    k {suc x} = s≤s k
+    k {x} = ≤-trans (n≤1+n x) (≤-reflexive (trans refl (+-comm 1 x)))
+
 
 _ : ⦃| TRUE |⦄
     `if (_X `≤ _Y)
       `then (Z := _Y `- _X)
       `else (Y := _X `+ _Z)
     ⦃| _Y == _X `+ _Z |⦄
-_ = h-cd (h-sp &&-elim (h-sp (form (sym ∘ m+[n∸m]≡n ∘ g)) h-:=)) 
-         (h-sp &&-elim (h-sp (form (λ x → refl)) h-:=)) 
+_ = h-cd (h-sp (⇒-trans &&-elimʳ (form (sym ∘ m+[n∸m]≡n ∘ A`≤→≤))) h-:=) 
+         (h-sp (⇒-trans &&-elimʳ (form (λ x → refl))) h-:=)
+
+_ : ⦃| _X <= N 3 |⦄
+    `while (_X `≤ N 2) `do
+      (X := _X `+ N 1)
+    ⦃| _X == N 3 |⦄
+_ = h-wc (form λ {⟨ fst , snd ⟩ → f fst (Anot`≤→¬≤ (¬→Anot snd))}) 
+         (h-wh (h-sp (⇒-trans &&-elimʳ (form (λ x → +-monoˡ-≤ 1 (A`≤→≤ x)))) h-:=))
   where
-    g : ∀ {x y} → T ((x <ᵇ y) ∨ (x ≡ᵇ y)) → x ≤ y 
-    g {zero} {y} x₁ = z≤n
-    g {suc x} {suc y} x₁ = s≤s (g x₁)
+    f : ∀ {x n} → x ≤ (suc n) → ¬ x ≤ n → x ≡ (suc n)
+    f {.0} {n} z≤n x₂ = ⊥-elim (x₂ z≤n)
+    f {.1} {zero} (s≤s z≤n) x₂ = refl
+    f {.(suc _)} {suc n} (s≤s x₁) x₂ = cong suc (f x₁ (x₂ ∘ s≤s))
+
+alwaysLoopHoare : ∀ {Q} → ⦃| TRUE |⦄ `while #t `do skip ⦃| Q |⦄ 
+alwaysLoopHoare = h-wc (⇒-trans &&-elimʳ (form (λ x → ⊥-elim (x tt))))
+                       (h-wh (h-sp &&-elimˡ h-sk))

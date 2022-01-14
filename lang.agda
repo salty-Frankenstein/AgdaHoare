@@ -4,7 +4,6 @@ open import Data.Nat.Base using (_+_; _∸_)
 open import Data.String using (String; _≟_)
 open import Data.List using (List; _∷_; [])
 open import Data.Product using (_×_; proj₁; proj₂) renaming (_,_ to ⟨_,_⟩)
--- open import Data.Integer.Base using (ℤ; _+_; _-_; +_)
 
 Id : Set
 Id = String
@@ -45,3 +44,5 @@ _Z = Var "Z"
 X = "X"
 Y = "Y"
 Z = "Z"
+#t = BV true
+#f = BV false 

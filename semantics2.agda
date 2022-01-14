@@ -1,15 +1,13 @@
 open import Data.Bool.Base using (Bool; true; false; T; _∧_; _∨_; not)
-open import Data.Nat using (ℕ; zero; suc; _+_; _∸_; _<?_; _≤?_; _<ᵇ_; _≡ᵇ_; _<_; _≤_; z≤n; s≤s) renaming (_≟_ to _=?_)
+open import Data.Nat using (ℕ; zero; suc; _+_; _∸_; _<?_; _≤?_; _<ᵇ_; _≡ᵇ_; _<_; _≤_; z≤n; s≤s)
 open import Data.Nat.Properties using (≤-refl; m+n≤o⇒m≤o; ∸-monoˡ-≤; n≤1+n; ≤-step; ≤-trans)
 open import Data.String using (String; _≟_)
-open import Relation.Nullary using (Dec; yes; no; ¬_; recompute)
+open import Relation.Nullary using (Dec; yes; no; ¬_)
 open import Data.List using (List; _∷_; [])
 open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl; sym; trans; cong)
 open import Data.Product using (_×_; proj₁; proj₂; Σ; ∃; Σ-syntax; ∃-syntax) renaming (_,_ to ⟨_,_⟩)
 open import Data.Unit using (⊤; tt)
-open import Data.Sum using (_⊎_; inj₁; inj₂) renaming ([_,_] to case-⊎)
 open import Data.Empty using (⊥; ⊥-elim)
-open import Relation.Nullary.Decidable using (True; toWitness; fromWitness)
 
 open import lang
 
@@ -56,16 +54,6 @@ modify : State → Id → ℕ → State
 modify s x n x' with x ≟ x' 
 ... | yes _ = n
 ... | no _ = s x'
--- modify s x n = modify' s x (x in? s) n
---   where
---     modify' : ∀ (σ : State) → (x : Id) → Dec (x ∈ σ) → ℤ → State
---     modify' (state []) x c n with c
---     ... | yes ()
---     ... | no _ = state (⟨ x , n ⟩ ∷ [])
---     modify' (state (_ ∷ xs)) x c n with c 
---     ... | yes (Z _) = state (⟨ x , n ⟩ ∷ xs)
---     ... | yes (S c') = modify' (state xs) x (yes c') n
---     ... | no _ = state (⟨ x , n ⟩ ∷ [])
 
 _ : evalI (modify σ₀ "x" 1) (N 1 `+ Var "x") ≡ 2
 _ = refl
@@ -131,11 +119,6 @@ form-→* : ∀ {M N n}
 form-→* -→Z = ⟨ 0 , -→Z ⟩
 form-→* s@(_-→S_ {n = n} _ _) = ⟨ suc n , s ⟩
 
--- data _-→*_ : Stmt × State → Stmt × State → Set where
---   form : ∀ {M N n}
---     → (x : M >- n -→ N)
---     → M -→* N 
-
 -→*-refl : ∀ {M}
   ---------
   → M -→* M
@@ -177,9 +160,6 @@ _-→*⟨_⟩_ : ∀ L {M N}
   → L -→* N 
 x -→*⟨ x-→*y ⟩ z = -→*-trans x-→*y z
 
--- x -→⟨ x-→y ⟩ -→Z = (x-→y -→S -→Z)
--- x -→⟨ x-→y ⟩ (x₁ -→S x₂) = (x-→y -→S x₁ -→S x₂)
-
 `begin_ : ∀ {M N}
   → M -→* N
   ----------
@@ -193,37 +173,37 @@ data _⇓_ : Comm × State → State → Set where
     → ⟨ skip , σ ⟩ ⇓ σ 
 
   :=-exec : ∀ {x n σ}
-  ----------------------------------------------
+    ------------------------------------------
     → ⟨ x := n , σ ⟩ ⇓ modify σ x (evalI σ n) 
 
   ;-exec : ∀ {c₀ c₁ σ σ' σ''}
     → ⟨ c₀ , σ ⟩ ⇓ σ'
     → ⟨ c₁ , σ' ⟩ ⇓ σ''
-    ---------------------------------
+    -------------------------
     → ⟨ c₀ ; c₁ , σ ⟩ ⇓ σ''
 
   `if-true : ∀ {b c₀ c₁ σ σ'}
     → T (evalB σ b)
     → ⟨ c₀ , σ ⟩ ⇓ σ'
-    -------------------------------------------
+    ---------------------------------------
     → ⟨ `if b `then c₀ `else c₁ , σ ⟩ ⇓ σ'
 
   `if-false : ∀ {b c₀ c₁ σ σ'}
     → T (not (evalB σ b))
     → ⟨ c₁ , σ ⟩ ⇓ σ'
-    -------------------------------------------
+    ----------------------------------------
     → ⟨ `if b `then c₀ `else c₁ , σ ⟩ ⇓ σ'
 
   `while-true : ∀ {b c σ σ' σ''}
     → T (evalB σ b)
     → ⟨ c , σ ⟩ ⇓ σ'
     → ⟨ `while b `do c , σ' ⟩ ⇓ σ''
-    --------------------------------------------------------------
+    ---------------------------------
     → ⟨ `while b `do c , σ ⟩ ⇓ σ''
 
   `while-false : ∀ {b c σ}
     → T (not (evalB σ b))
-    ----------------------------------
+    ---------------------------------
     → ⟨ `while b `do c , σ ⟩ ⇓ σ 
 
 ;-local : ∀ {c₁ s s' c'} 
@@ -248,11 +228,6 @@ sc-mg {c₁} {c₂} {s} {s'} {s₂} {t} x x₁ =
   -→*⟨ x₁ ⟩
     ⟨ t , s' ⟩
   `∎
-
-sc-mg' : ∀ {c₁ c₂ s s' s₂} 
-  → ⟨ c₁ , s ⟩ -→* ⟨ skip , s₂ ⟩ → ⟨ c₂ , s₂ ⟩ -→* ⟨ skip , s' ⟩
-  → ⟨ c₁ ; c₂ , s ⟩ -→* ⟨ skip , s' ⟩ 
-sc-mg' = sc-mg
 
 sc-sp : ∀ {c₁ c₂ s s' n} 
   → ⟨ c₁ ; c₂ , s ⟩ >- n -→ ⟨ skip , s' ⟩ 
