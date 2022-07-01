@@ -63,6 +63,9 @@ infixr 0 _⇒_
 data _⇒_ : Assertion → Assertion → Set where
   form : ∀ {p q} → (∀ {st} → p st → q st) → p ⇒ q
 
+⇒-refl : ∀ {P} → P ⇒ P 
+⇒-refl = form id
+
 ⇒-trans : ∀ {P Q R} → P ⇒ Q → Q ⇒ R → P ⇒ R 
 ⇒-trans (form x) (form x₁) = form (λ x₂ → x₁ (x x₂))
 
@@ -71,6 +74,26 @@ data _⇒_ : Assertion → Assertion → Set where
 
 &&-elimʳ : ∀ {P Q} → P && Q ⇒ Q
 &&-elimʳ = form proj₂
+
+&&-form : ∀ {P Q R} → P ⇒ Q → P ⇒ R → P ⇒ Q && R 
+&&-form (form x) (form x₁) = form (λ x₂ → ⟨ x x₂ , x₁ x₂ ⟩)
+
+&&-comm : ∀ {P Q} → P && Q ⇒ Q && P 
+&&-comm = form (λ x → ⟨ (proj₂ x) , (proj₁ x) ⟩)
+
+||-formˡ : ∀ {P Q} → P ⇒ P || Q
+||-formˡ = form inj₁
+
+||-formʳ : ∀ {P Q} → Q ⇒ P || Q
+||-formʳ = form inj₂
+
+||-injˡ : ∀ {P Q R} → (P ⇒ R) → P || Q ⇒ R || Q 
+||-injˡ (form x) = form (λ {(inj₁ x1) → inj₁ (x x1)
+                          ; (inj₂ y) → inj₂ y})
+
+||-injʳ : ∀ {P Q R} → (Q ⇒ R) → P || Q ⇒ P || R 
+||-injʳ (form y) = form (λ {(inj₁ x) → inj₁ x
+                          ; (inj₂ y1) → inj₂ (y y1)})
 
 data ⦃|_|⦄_⦃|_|⦄ : Assertion → Comm → Assertion → Set where
   form : ∀ {P c Q}
